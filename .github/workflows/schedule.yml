@@ -2,7 +2,9 @@ name: GasBuddy Daily Notifier
 
 on:
   schedule:
-    - cron: "*/1 * * * *"   # every 10 min between 6AM-11PM EST
+    # GitHub cron is in UTC. EST = UTC-5 (winter), EDT = UTC-4 (summer)
+    # Example here uses EDT (UTC-4). Adjust if needed.
+    - cron: "0-59 10-2 * * *"   # every minute from 6AM-11PM EST/EDT
   workflow_dispatch:            # allow manual trigger
 
 jobs:
