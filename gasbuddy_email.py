@@ -1,9 +1,15 @@
 import os
 import smtplib
-import requests
-from bs4 import BeautifulSoup
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
+from webdriver_manager.chrome import ChromeDriverManager
 
 # --- Gmail credentials from environment variables ---
 GMAIL_USER = os.environ.get("GMAIL_USER")
@@ -11,37 +17,35 @@ GMAIL_PASS = os.environ.get("GMAIL_PASS")
 TO_EMAIL = GMAIL_USER
 
 def fetch_prices():
-    url = "https://www.gasbuddy.com/station/130688"
-    headers = {
-        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                       "AppleWebKit/537.36 (KHTML, like Gecko) "
-                       "Chrome/114.0.0.0 Safari/537.36")
-    }
-    response = requests.get(url, headers=headers, timeout=15)
-    if response.status_code != 200:
-        print(f"Failed to fetch page. Status code: {response.status_code}")
-        return None, None
+    options = Options()
+    options.add_argument("--headless=new")   # headless mode for GitHub Actions
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
 
-    soup = BeautifulSoup(response.text, "html.parser")
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
-    # Note: GasBuddy pages dynamically render prices via JavaScript
-    # If the prices aren't visible in the HTML, this will fail.
-    # Here, we try to extract the Regular and Premium prices from the HTML
     try:
-        regular_price_elem = soup.select_one(
-            "div.station-price__regular span.fuel-price__price"
-        )
-        premium_price_elem = soup.select_one(
-            "div.station-price__premium span.fuel-price__price"
-        )
+        driver.get("https://www.gasbuddy.com/station/130688")
+        wait = WebDriverWait(driver, 15)
 
-        regular_price = regular_price_elem.text.strip() if regular_price_elem else "Price not available"
-        premium_price = premium_price_elem.text.strip() if premium_price_elem else "Price not available"
+        # Regular
+        regular_elem = wait.until(EC.presence_of_element_located((
+            By.XPATH, '//*[@id="root"]/div/div[3]/div/div/div[2]/div[1]/div[1]/div[1]/div[3]/div/div[2]/div[2]/div[1]/span'
+        )))
+        regular_price = regular_elem.text.strip()
+
+        # Premium
+        premium_elem = wait.until(EC.presence_of_element_located((
+            By.XPATH, '//*[@id="root"]/div/div[3]/div/div/div[2]/div[1]/div[1]/div[1]/div[3]/div/div[2]/div[2]/div[2]/span'
+        )))
+        premium_price = premium_elem.text.strip()
 
         return regular_price, premium_price
-    except Exception as e:
-        print(f"Error parsing HTML: {e}")
-        return None, None
+
+    except TimeoutException:
+        return "Price not available", "Price not available"
+    finally:
+        driver.quit()
 
 def send_email(regular, premium):
     subject = "Costco Warden Gas Prices"
@@ -65,11 +69,8 @@ def send_email(regular, premium):
 
 def main():
     regular, premium = fetch_prices()
-    if not regular and not premium:
-        print("Could not fetch prices.")
-    else:
-        print(f"Regular: {regular}, Premium: {premium}")
-        send_email(regular, premium)
+    print(f"Regular: {regular}, Premium: {premium}")
+    send_email(regular, premium)
 
 if __name__ == "__main__":
     main()
