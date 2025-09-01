@@ -1,71 +1,56 @@
 import os
 import smtplib
-import requests
-from bs4 import BeautifulSoup
 from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
+import time
 
-# --- Gmail credentials from environment variables ---
-GMAIL_USER = os.environ.get("GMAIL_USER")
-GMAIL_PASS = os.environ.get("GMAIL_PASS")
-TO_EMAIL = GMAIL_USER
+def fetch_gas_price():
+    url = "https://www.gasbuddy.com/station/130688"  # Costco Warden station URL
 
-def fetch_prices():
-    url = "https://www.gasbuddy.com/station/130688"  # Costco Warden
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/114.0.0.0 Safari/537.36"
-        )
-    }
-    response = requests.get(url, headers=headers, timeout=15)
-    if response.status_code != 200:
-        print(f"Failed to fetch page. Status code: {response.status_code}")
-        return "Price not available", "Price not available"
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless=new")  # headless for GitHub Actions
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
 
-    soup = BeautifulSoup(response.text, "html.parser")
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    driver.get(url)
+    time.sleep(5)  # wait for JS to load
 
     try:
-        regular_price_elem = soup.select_one(
-            "div.station-price__regular span.fuel-price__price"
-        )
-        premium_price_elem = soup.select_one(
-            "div.station-price__premium span.fuel-price__price"
-        )
+        regular = driver.find_element(By.XPATH, "//div[contains(text(),'Regular')]/following-sibling::div").text
+    except:
+        regular = "Price not available"
 
-        regular_price = regular_price_elem.text.strip() if regular_price_elem else "Price not available"
-        premium_price = premium_price_elem.text.strip() if premium_price_elem else "Price not available"
+    try:
+        premium = driver.find_element(By.XPATH, "//div[contains(text(),'Premium')]/following-sibling::div").text
+    except:
+        premium = "Price not available"
 
-        return regular_price, premium_price
-    except Exception as e:
-        print(f"Error parsing HTML: {e}")
-        return "Price not available", "Price not available"
+    driver.quit()
+    return regular, premium
 
-def send_email(regular, premium):
-    subject = "Costco Warden Gas Prices"
-    body = f"Costco Warden Regular: {regular}\nCostco Warden Premium: {premium}"
+def send_email(subject, body):
+    user = os.getenv("GMAIL_USER")
+    pwd = os.getenv("GMAIL_PASS")
+    recipient = os.getenv("GMAIL_USER")  # send to yourself
 
-    msg = MIMEMultipart()
-    msg["From"] = GMAIL_USER
-    msg["To"] = TO_EMAIL
+    msg = MIMEText(body)
     msg["Subject"] = subject
-    msg.attach(MIMEText(body, "plain"))
+    msg["From"] = user
+    msg["To"] = recipient
 
     try:
-        server = smtplib.SMTP("smtp.gmail.com", 587)
-        server.starttls()
-        server.login(GMAIL_USER, GMAIL_PASS)
-        server.sendmail(GMAIL_USER, TO_EMAIL, msg.as_string())
-        server.quit()
-        print("Email sent successfully!")
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(user, pwd)
+            server.sendmail(user, recipient, msg.as_string())
+        print("✅ Email sent successfully")
     except Exception as e:
         print(f"Error sending email: {e}")
 
-def main():
-    regular, premium = fetch_prices()
-    print(f"Regular: {regular}, Premium: {premium}")
-    send_email(regular, premium)
-
 if __name__ == "__main__":
-    main()
+    regular, premium = fetch_gas_price()
+    body = f"Regular: {regular}, Premium: {premium}"
+    send_email("GasBuddy Price Update", body)
