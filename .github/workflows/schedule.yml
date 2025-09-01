@@ -1,21 +1,22 @@
-name: GasBuddy Email Scheduler
+name: Gasbuddy Email Scheduler
 
 on:
   schedule:
-    - cron: "* * * * *"  # every minute for testing
-  workflow_dispatch:      # allows manual run
+    - cron: "*/1 * * * *"   # Runs every 1 minute (for testing)
+  workflow_dispatch:         # Allows manual trigger
 
 jobs:
-  send_email:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: "3.10"
 
       - name: Install dependencies
         run: |
