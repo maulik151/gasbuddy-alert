@@ -80,7 +80,7 @@ if __name__ == "__main__":
          '//*[@id="root"]/div/div[3]/div/div/div[2]/div[1]/div[1]/div[1]/div[3]/div/div[2]/div[2]/div[1]/span',
          '//*[@id="root"]/div/div[3]/div/div/div[2]/div[1]/div[1]/div[1]/div[3]/div/div[2]/div[2]/div[2]/span'),
 
-        ("Costco Etobicoke", "https://www.gasbuddy.com/station/11791",
+        ("1977 Kennedy Rd - Petro", "https://www.gasbuddy.com/station/11791",
          '//*[@id="root"]/div/div[3]/div/div/div[2]/div[1]/div[1]/div[1]/div[3]/div/div[2]/div[2]/div[1]/span',
          '//*[@id="root"]/div/div[3]/div/div/div[2]/div[1]/div[1]/div[1]/div[3]/div/div[2]/div[2]/div[3]/span')
     ]
