@@ -15,66 +15,79 @@ GMAIL_USER = "try.mkoladiya@gmail.com"
 GMAIL_PASS = "ycvq vgxm qhhz unah"   # App Password
 TO_EMAIL = GMAIL_USER
 
-def fetch_and_email():
-    print("Fetching prices...")
 
+def fetch_prices(station_name, url, regular_xpath, premium_xpath):
+    """Fetch regular and premium prices from a GasBuddy station page."""
     options = Options()
-    options.add_argument("--headless=new")  # Run headless; comment out to debug visually
+    options.add_argument("--headless=new")
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                          "AppleWebKit/537.36 (KHTML, like Gecko) "
                          "Chrome/114.0.0.0 Safari/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    prices = {}
 
     try:
-        driver.get("https://www.gasbuddy.com/station/130688")
-
+        driver.get(url)
         wait = WebDriverWait(driver, 15)
 
         # Regular price
         try:
-            regular_price_elem = wait.until(EC.presence_of_element_located((
-                By.XPATH, '//*[@id="root"]/div/div[3]/div/div/div[2]/div[1]/div[1]/div[1]/div[3]/div/div[2]/div[2]/div[1]/span'
-            )))
-            regular_price = regular_price_elem.text.strip()
+            regular_price_elem = wait.until(EC.presence_of_element_located((By.XPATH, regular_xpath)))
+            prices["regular"] = regular_price_elem.text.strip()
         except TimeoutException:
-            regular_price = "Price not available"
+            prices["regular"] = "Price not available"
 
         # Premium price
         try:
-            premium_price_elem = wait.until(EC.presence_of_element_located((
-                By.XPATH, '//*[@id="root"]/div/div[3]/div/div/div[2]/div[1]/div[1]/div[1]/div[3]/div/div[2]/div[2]/div[2]/span'
-            )))
-            premium_price = premium_price_elem.text.strip()
+            premium_price_elem = wait.until(EC.presence_of_element_located((By.XPATH, premium_xpath)))
+            prices["premium"] = premium_price_elem.text.strip()
         except TimeoutException:
-            premium_price = "Price not available"
+            prices["premium"] = "Price not available"
 
-        print("Costco Warden Regular:", regular_price)
-        print("Costco Warden Premium:", premium_price)
-
-        # Prepare email
-        subject = "Costco Warden Gas Prices"
-        body = f"Costco Warden Regular: {regular_price}\nCostco Warden Premium: {premium_price}"
-
-        msg = MIMEMultipart()
-        msg["From"] = GMAIL_USER
-        msg["To"] = TO_EMAIL
-        msg["Subject"] = subject
-        msg.attach(MIMEText(body, "plain"))
-
-        # Send email
-        server = smtplib.SMTP("smtp.gmail.com", 587)
-        server.starttls()
-        server.login(GMAIL_USER, GMAIL_PASS)
-        server.sendmail(GMAIL_USER, TO_EMAIL, msg.as_string())
-        server.quit()
-
-        print("Email sent successfully!")
-
-    except Exception as e:
-        print(f"Error: {e}")
     finally:
         driver.quit()
 
+    return station_name, prices
+
+
+def send_email(results):
+    """Send email with fetched prices."""
+    subject = "Gas Prices Update"
+    body_lines = []
+    for station, prices in results:
+        body_lines.append(f"{station} Regular: {prices['regular']}")
+        body_lines.append(f"{station} Premium: {prices['premium']}")
+        body_lines.append("")  # blank line between stations
+    body = "\n".join(body_lines)
+
+    msg = MIMEMultipart()
+    msg["From"] = GMAIL_USER
+    msg["To"] = TO_EMAIL
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
+
+    server = smtplib.SMTP("smtp.gmail.com", 587)
+    server.starttls()
+    server.login(GMAIL_USER, GMAIL_PASS)
+    server.sendmail(GMAIL_USER, TO_EMAIL, msg.as_string())
+    server.quit()
+
+
 if __name__ == "__main__":
-    fetch_and_email()
+    stations = [
+        ("Costco Warden", "https://www.gasbuddy.com/station/130688",
+         '//*[@id="root"]/div/div[3]/div/div/div[2]/div[1]/div[1]/div[1]/div[3]/div/div[2]/div[2]/div[1]/span',
+         '//*[@id="root"]/div/div[3]/div/div/div[2]/div[1]/div[1]/div[1]/div[3]/div/div[2]/div[2]/div[2]/span'),
+
+        ("Costco Etobicoke", "https://www.gasbuddy.com/station/11791",
+         '//*[@id="root"]/div/div[3]/div/div/div[2]/div[1]/div[1]/div[1]/div[3]/div/div[2]/div[2]/div[1]/span',
+         '//*[@id="root"]/div/div[3]/div/div/div[2]/div[1]/div[1]/div[1]/div[3]/div/div[2]/div[2]/div[3]/span')
+    ]
+
+    results = []
+    for station in stations:
+        results.append(fetch_prices(*station))
+
+    send_email(results)
+    print("Email sent successfully!")
